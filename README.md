@@ -28,6 +28,12 @@ const apiKey = import.meta.env.COMMENTS_API_KEY;
   />
 ```
 
+You can also include our default styling by importing the CSS file:
+
+```css
+import '@970design/vue-comments/dist/style.css';
+```
+
 ## Props
 
 | Prop            | Type | Required | Description                                          |
