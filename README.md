@@ -24,7 +24,7 @@ const apiKey = import.meta.env.COMMENTS_API_KEY;
     client:load
     post_id={postID}
     endpoint={endpoint}
-    api_key={comments_api_key}
+    api_key={apiKey}
   />
 ```
 
