@@ -1,0 +1,51 @@
+{
+  "name": "@970design/vue-comments",
+  "version": "1.0.0",
+  "description": "A Vue component for displaying headless WordPress comments.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/970Design/vue-comments.git"
+  },
+  "keywords": [
+    "headless",
+    "wordpress",
+    "comments",
+    "vue",
+    "component"
+  ],
+  "author": {
+    "name": "TJ Szewczak",
+    "email": "webmaster@970design.com",
+    "url": "https://970design.com"
+  },
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/970Design/vue-comments/issues"
+  },
+  "homepage": "https://github.com/970Design/vue-comments#readme",
+  "main": "components/VueComments.vue",
+  "module": "./dist/vue-comments.es.js",
+  "types": "./vue-comments.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "vite build"
+  },
+  "exports": {
+    ".": {
+      "types": "./vue-comments.d.ts",
+      "import": "./dist/vue-comments.es.js",
+      "require": "./dist/vue-comments.umd.js"
+    }
+  },
+  "files": [
+    "dist",
+    "vue-comments.d.ts"
+  ],
+  "dependencies": {
+    "vue": "^3.5.21"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "vite": "^7.1.5"
+  }
+}
