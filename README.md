@@ -20,7 +20,7 @@ const endpoint = 'https://my-headless-wordpress.com';
 const apiKey = import.meta.env.COMMENTS_API_KEY;
 ---
 
-  <Comment
+  <VueComments
     client:load
     post_id={postID}
     endpoint={endpoint}
