@@ -1,5 +1,5 @@
 <script setup>
-import {ref, onMounted, computed} from 'vue';
+import {ref, onMounted, computed, watch, nextTick} from 'vue';
 
 const props = defineProps(['post_id', 'endpoint', 'api_key']);
 
@@ -99,21 +99,21 @@ const submitComment = async (event) => {
 const handleReplyClick = (event) => {
   event.preventDefault();
   const commentId = event.target.getAttribute('data-commentid');
-  const respondElement = event.target.getAttribute('data-respondelement');
+  const replyToText = event.target.getAttribute('data-replyto');
 
-  if (commentId && respondElement) {
+  if (commentId) {
     replyingTo.value = {
       id: commentId,
-      element: respondElement
+      replyTo: replyToText || `Comment #${commentId}`
     };
 
     // Scroll to form
     setTimeout(() => {
-      const formElement = document.getElementById('comment-form');
+      const formElement = document.getElementById('respond');
       if (formElement) {
         formElement.scrollIntoView({behavior: 'smooth', block: 'start'});
         // Focus on the comment textarea
-        const textarea = formElement.querySelector('#content');
+        const textarea = formElement.querySelector('#comment');
         if (textarea) {
           textarea.focus();
         }
@@ -127,24 +127,27 @@ const cancelReply = () => {
   replyingTo.value = null;
 };
 
-// Handle clicks on reply links in rendered HTML
-const handleRenderedHTML = () => {
-  setTimeout(() => {
+// Attach event listeners to reply links
+const attachReplyListeners = () => {
+  nextTick(() => {
     const replyLinks = document.querySelectorAll('.comment-reply-link');
     replyLinks.forEach(link => {
+      // Remove existing listener if any
+      link.removeEventListener('click', handleReplyClick);
+      // Add new listener
       link.addEventListener('click', handleReplyClick);
     });
-  }, 100);
+  });
 };
+
+// Watch for changes in rendered comments
+watch(renderedComments, () => {
+  attachReplyListeners();
+});
 
 onMounted(() => {
   fetchComments();
 });
-
-// Watch for changes in rendered comments and attach event listeners
-const updateReplyLinks = () => {
-  handleRenderedHTML();
-};
 </script>
 
 <template>
@@ -157,7 +160,7 @@ const updateReplyLinks = () => {
 
     <!-- Comments List -->
     <div v-else-if="renderedComments" class="comments-list">
-      <ol class="comment-list" v-html="renderedComments" @vue:mounted="updateReplyLinks" @vue:updated="updateReplyLinks"></ol>
+      <ol class="comment-list" v-html="renderedComments"></ol>
     </div>
 
     <!-- No Comments -->
@@ -166,63 +169,44 @@ const updateReplyLinks = () => {
     </div>
 
     <!-- Comment Form -->
-    <div id="comment-form" class="comment-form">
-      <h3 v-if="replyingTo">Reply to Comment #{{ replyingTo.id }}</h3>
-      <h3 v-else>Leave a Comment</h3>
+    <div id="respond" class="comment-respond">
+      <h3 id="reply-title" class="comment-reply-title">
+        <span v-if="replyingTo">{{ replyingTo.replyTo }}</span>
+        <span v-else>Leave a Comment</span>
+        <small v-if="replyingTo">
+          <a rel="nofollow" @click.prevent="cancelReply" style="cursor: pointer;">Cancel reply</a>
+        </small>
+      </h3>
 
       <div v-if="message" class="message" :class="{ success: message.includes('successfully'), error: !message.includes('successfully') }">
         {{ message }}
       </div>
 
-      <div v-if="replyingTo" class="replying-notice">
-        <span>Replying to comment #{{ replyingTo.id }}</span>
-        <button type="button" @click="cancelReply" class="cancel-reply-btn">Cancel Reply</button>
-      </div>
-
       <form id="commentform" class="comment-form" @submit="submitComment">
+        <input type="hidden" name="comment_post_ID" :value="props.post_id">
         <input type="hidden" name="comment_parent" :value="replyingTo?.id || 0">
 
         <p class="comment-form-author">
-          <label for="author"> Name <span class="required">*</span></label>
+          <label for="author">Name <span class="required">*</span></label>
           <input id="author" name="author_name" type="text" required>
         </p>
+
         <p class="comment-form-email">
-          <label for="email"> Email <span class="required">*</span></label>
+          <label for="email">Email <span class="required">*</span></label>
           <input id="email" name="author_email" type="email" required>
         </p>
+
         <p class="comment-form-comment">
-          <label for="comment"> Comment <span class="required">*</span></label>
-          <textarea id="comment" name="content" required></textarea>
+          <label for="comment">Comment <span class="required">*</span></label>
+          <textarea id="comment" name="content" rows="8" required></textarea>
         </p>
+
         <p class="form-submit">
           <button type="submit" :disabled="submitting" id="submit" class="btn submit">
             {{ submitting ? 'Submitting...' : 'Submit Comment' }}
           </button>
         </p>
       </form>
-
-<!--      <form @submit="submitComment">-->
-<!--        <div class="form-group">-->
-<!--          <label for="author_name">Name *</label>-->
-<!--          <input type="text" id="author_name" name="author_name" required>-->
-<!--        </div>-->
-
-<!--        <div class="form-group">-->
-<!--          <label for="author_email">Email *</label>-->
-<!--          <input type="email" id="author_email" name="author_email" required>-->
-<!--        </div>-->
-
-<!--        <div class="form-group">-->
-<!--          <label for="content">Comment *</label>-->
-<!--          <textarea id="content" name="content" rows="5" required></textarea>-->
-<!--        </div>-->
-
-<!--        <input type="hidden" name="parent" :value="replyingTo?.id || 0">-->
-
-<!--        <button type="submit" :disabled="submitting" class="submit-btn">-->
-<!--          {{ submitting ? 'Submitting...' : 'Submit Comment' }}-->
-<!--        </button>-->
-<!--      </form>-->
     </div>
   </section>
 </template>
@@ -266,7 +250,7 @@ const updateReplyLinks = () => {
 
 .comment-list :deep(.comment-body) {
   padding: 1.5rem;
-  background: #f9f9f9;
+  background-color: #f9f9f9;
   border-radius: 4px;
 }
 
@@ -323,7 +307,7 @@ const updateReplyLinks = () => {
 
 .comment-list :deep(.comment-awaiting-moderation) {
   padding: 0.5rem 1rem;
-  background: #fff3cd;
+  background-color: #fff3cd;
   border: 1px solid #ffc107;
   border-radius: 4px;
   color: #856404;
@@ -348,16 +332,17 @@ const updateReplyLinks = () => {
 .comment-list :deep(.comment-reply-link) {
   display: inline-block;
   padding: 0.4rem 1rem;
-  background: #0066cc;
+  background-color: #0066cc;
   color: white;
   text-decoration: none;
   border-radius: 4px;
   font-size: 0.9rem;
   transition: background 0.2s;
+  cursor: pointer;
 }
 
 .comment-list :deep(.comment-reply-link:hover) {
-  background: #0052a3;
+  background-color: #0052a3;
 }
 
 .no-comments {
@@ -368,47 +353,33 @@ const updateReplyLinks = () => {
   padding: 2rem;
 }
 
-.comment-form {
+.comment-respond {
   margin-top: 2rem;
   padding-top: 2rem;
   border-top: 1px solid #eee;
 }
 
-.comment-form h4 {
+.comment-reply-title {
   margin-bottom: 1.5rem;
   color: #333;
-}
-
-.replying-notice {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
-  background: #e7f3ff;
-  border: 1px solid #0066cc;
-  border-radius: 4px;
-  margin-bottom: 1rem;
+  gap: 1rem;
 }
 
-.replying-notice span {
+.comment-reply-title small {
+  font-size: 0.7em;
+  font-weight: normal;
+}
+
+.comment-reply-title small a {
   color: #0066cc;
-  font-weight: 500;
+  text-decoration: none;
 }
 
-.cancel-reply-btn {
-  background: transparent;
-  color: #0066cc;
-  border: 1px solid #0066cc;
-  padding: 0.4rem 0.75rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s;
-}
-
-.cancel-reply-btn:hover {
-  background: #0066cc;
-  color: white;
+.comment-reply-title small a:hover {
+  text-decoration: underline;
 }
 
 .comment-form-author,
@@ -424,6 +395,12 @@ const updateReplyLinks = () => {
   margin-bottom: 0.5rem;
   font-weight: 500;
   color: #333;
+}
+
+.comment-form-author .required,
+.comment-form-email .required,
+.comment-form-comment .required {
+  color: #dc3545;
 }
 
 .comment-form-author input,
@@ -445,8 +422,12 @@ const updateReplyLinks = () => {
   box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
 }
 
+.form-submit {
+  margin: 1.5rem 0 0;
+}
+
 .submit {
-  background: #0066cc;
+  background-color: #0066cc;
   color: white;
   padding: 0.75rem 1.5rem;
   border: none;
@@ -457,28 +438,28 @@ const updateReplyLinks = () => {
 }
 
 .submit:hover:not(:disabled) {
-  background: #0052a3;
+  background-color: #0052a3;
 }
 
 .submit:disabled {
-  background: #ccc;
+  background-color: #ccc;
   cursor: not-allowed;
 }
 
 .comment-notes,
 .message {
-  background: #d4edda;
+  background-color: #d4edda;
   color: #155724;
   border: 1px solid #c3e6cb;
   border-radius: 4px;
   padding: 1rem;
-  margin: 1rem 0
+  margin: 1rem 0;
 }
 
 .comment-notes.error,
 .message.error {
-  background: #f8d7da;
+  background-color: #f8d7da;
   color: #721c24;
-  border: 1px solid #f5c6cb
+  border: 1px solid #f5c6cb;
 }
 </style>
