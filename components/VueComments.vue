@@ -305,7 +305,7 @@ const updateReplyLinks = () => {
 }
 
 .comment-list :deep(.comment-metadata a) {
-  color: #666;
+  color: inherit;
   text-decoration: none;
 }
 
@@ -465,21 +465,20 @@ const updateReplyLinks = () => {
   cursor: not-allowed;
 }
 
+.comment-notes,
 .message {
-  padding: 1rem;
-  border-radius: 4px;
-  margin: 1rem 0;
-}
-
-.message.success {
   background: #d4edda;
   color: #155724;
   border: 1px solid #c3e6cb;
+  border-radius: 4px;
+  padding: 1rem;
+  margin: 1rem 0
 }
 
+.comment-notes.error,
 .message.error {
   background: #f8d7da;
   color: #721c24;
-  border: 1px solid #f5c6cb;
+  border: 1px solid #f5c6cb
 }
 </style>
