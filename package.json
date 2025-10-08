@@ -1,6 +1,6 @@
 {
   "name": "@970design/vue-comments",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "description": "A Vue component for displaying headless WordPress comments.",
   "repository": {
     "type": "git",
@@ -23,7 +23,7 @@
     "url": "https://github.com/970Design/vue-comments/issues"
   },
   "homepage": "https://github.com/970Design/vue-comments#readme",
-  "main": "components/VueComments.vue",
+  "main": "./dist/vue-comments.umd.js",
   "module": "./dist/vue-comments.es.js",
   "types": "./vue-comments.d.ts",
   "scripts": {
