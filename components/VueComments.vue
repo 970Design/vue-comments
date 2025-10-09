@@ -306,13 +306,6 @@ onMounted(async () => {
           <textarea id="comment" name="content" rows="8" required></textarea>
         </p>
 
-        <!-- reCAPTCHA Notice -->
-        <p v-if="recaptchaConfig.enabled" class="recaptcha-notice" style="font-size: 0.9em; color: #666;">
-          This site is protected by reCAPTCHA and the Google
-          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and
-          <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms of Service</a> apply.
-        </p>
-
         <p class="form-submit">
           <button type="submit" :disabled="submitting" id="submit" class="btn submit">
             {{ submitting ? 'Submitting...' : 'Submit Comment' }}
@@ -580,19 +573,5 @@ onMounted(async () => {
   background-color: #f8d7da;
   color: #721c24;
   border: 1px solid #f5c6cb;
-}
-
-.recaptcha-notice {
-  margin-top: 10px;
-  margin-bottom: 15px;
-}
-
-.recaptcha-notice a {
-  color: #1a73e8;
-  text-decoration: none;
-}
-
-.recaptcha-notice a:hover {
-  text-decoration: underline;
 }
 </style>
