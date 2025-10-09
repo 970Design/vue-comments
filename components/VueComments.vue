@@ -1,5 +1,5 @@
 <script setup>
-import {ref, onMounted, computed, watch, nextTick} from 'vue';
+import {ref, onMounted, computed, watch, nextTick, onBeforeUnmount} from 'vue';
 
 const props = defineProps(['post_id', 'endpoint', 'api_key']);
 
@@ -8,6 +8,82 @@ const loading = ref(true);
 const submitting = ref(false);
 const message = ref('');
 const replyingTo = ref(null);
+const recaptchaConfig = ref({ enabled: false, site_key: '' });
+const recaptchaLoaded = ref(false);
+
+// Load reCAPTCHA script
+const loadRecaptchaScript = () => {
+  return new Promise((resolve, reject) => {
+    if (window.grecaptcha) {
+      recaptchaLoaded.value = true;
+      resolve();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://www.google.com/recaptcha/api.js?render=${recaptchaConfig.value.site_key}`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      recaptchaLoaded.value = true;
+      resolve();
+    };
+    script.onerror = () => {
+      reject(new Error('Failed to load reCAPTCHA script'));
+    };
+    document.head.appendChild(script);
+  });
+};
+
+// Fetch reCAPTCHA configuration
+const fetchRecaptchaConfig = async () => {
+  try {
+    const response = await fetch(
+        `${props.endpoint}/wp-json/headless-comments/v1/recaptcha/config`,
+        {
+          headers: {
+            'X-API-Key': props.api_key
+          }
+        }
+    );
+
+    if (response.ok) {
+      const config = await response.json();
+      recaptchaConfig.value = config;
+
+      // Load reCAPTCHA script if enabled
+      if (config.enabled && config.site_key) {
+        try {
+          await loadRecaptchaScript();
+        } catch (error) {
+          console.error('Error loading reCAPTCHA:', error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching reCAPTCHA config:', error);
+  }
+};
+
+// Get reCAPTCHA token
+const getRecaptchaToken = async () => {
+  if (!recaptchaConfig.value.enabled || !recaptchaLoaded.value) {
+    return null;
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      window.grecaptcha.ready(() => {
+        window.grecaptcha
+            .execute(recaptchaConfig.value.site_key, { action: 'submit_comment' })
+            .then(token => resolve(token))
+            .catch(error => reject(error));
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
 
 // Fetch comments using the headless comments API
 const fetchComments = async () => {
@@ -59,6 +135,25 @@ const submitComment = async (event) => {
   };
 
   try {
+    // Get reCAPTCHA token if enabled
+    if (recaptchaConfig.value.enabled) {
+      try {
+        const token = await getRecaptchaToken();
+        if (token) {
+          commentData.recaptcha_token = token;
+        } else {
+          message.value = 'Failed to verify reCAPTCHA. Please try again.';
+          submitting.value = false;
+          return;
+        }
+      } catch (error) {
+        console.error('reCAPTCHA error:', error);
+        message.value = 'Failed to verify reCAPTCHA. Please try again.';
+        submitting.value = false;
+        return;
+      }
+    }
+
     const response = await fetch(
         `${props.endpoint}/wp-json/headless-comments/v1/posts/${props.post_id}/comments`,
         {
@@ -145,8 +240,18 @@ watch(renderedComments, () => {
   attachReplyListeners();
 });
 
-onMounted(() => {
-  fetchComments();
+// Cleanup reCAPTCHA badge on unmount (optional)
+onBeforeUnmount(() => {
+  const badge = document.querySelector('.grecaptcha-badge');
+  if (badge && recaptchaConfig.value.enabled) {
+    // Optional: remove badge or leave it for other components
+    // badge.remove();
+  }
+});
+
+onMounted(async () => {
+  await fetchRecaptchaConfig();
+  await fetchComments();
 });
 </script>
 
@@ -199,6 +304,13 @@ onMounted(() => {
         <p class="comment-form-comment">
           <label for="comment">Comment <span class="required">*</span></label>
           <textarea id="comment" name="content" rows="8" required></textarea>
+        </p>
+
+        <!-- reCAPTCHA Notice -->
+        <p v-if="recaptchaConfig.enabled" class="recaptcha-notice" style="font-size: 0.9em; color: #666;">
+          This site is protected by reCAPTCHA and the Google
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and
+          <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms of Service</a> apply.
         </p>
 
         <p class="form-submit">
@@ -448,18 +560,39 @@ onMounted(() => {
 
 .comment-notes,
 .message {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
   border-radius: 4px;
   padding: 1rem;
   margin: 1rem 0;
 }
 
-.comment-notes.error,
+.comment-notes {
+  background-color: #f3f3f3;
+  border: 1px solid #eee;
+}
+
+.message.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
 .message.error {
   background-color: #f8d7da;
   color: #721c24;
   border: 1px solid #f5c6cb;
+}
+
+.recaptcha-notice {
+  margin-top: 10px;
+  margin-bottom: 15px;
+}
+
+.recaptcha-notice a {
+  color: #1a73e8;
+  text-decoration: none;
+}
+
+.recaptcha-notice a:hover {
+  text-decoration: underline;
 }
 </style>
