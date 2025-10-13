@@ -1,5 +1,6 @@
 <script setup>
-import {ref, onMounted, computed, watch, nextTick, onBeforeUnmount} from 'vue';
+import {ref, onMounted, computed, watch, nextTick} from 'vue';
+import { useReCaptcha } from 'recaptcha-v3';
 
 const props = defineProps(['post_id', 'endpoint', 'api_key']);
 
@@ -9,31 +10,7 @@ const submitting = ref(false);
 const message = ref('');
 const replyingTo = ref(null);
 const recaptchaConfig = ref({ enabled: false, site_key: '' });
-const recaptchaLoaded = ref(false);
-
-// Load reCAPTCHA script
-const loadRecaptchaScript = () => {
-  return new Promise((resolve, reject) => {
-    if (window.grecaptcha) {
-      recaptchaLoaded.value = true;
-      resolve();
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = `https://www.google.com/recaptcha/api.js?render=${recaptchaConfig.value.site_key}`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      recaptchaLoaded.value = true;
-      resolve();
-    };
-    script.onerror = () => {
-      reject(new Error('Failed to load reCAPTCHA script'));
-    };
-    document.head.appendChild(script);
-  });
-};
+const recaptchaInstance = ref(null);
 
 // Fetch reCAPTCHA configuration
 const fetchRecaptchaConfig = async () => {
@@ -51,12 +28,20 @@ const fetchRecaptchaConfig = async () => {
       const config = await response.json();
       recaptchaConfig.value = config;
 
-      // Load reCAPTCHA script if enabled
+      // Initialize reCAPTCHA if enabled
       if (config.enabled && config.site_key) {
         try {
-          await loadRecaptchaScript();
+          recaptchaInstance.value = await useReCaptcha({
+            siteKey: config.site_key,
+            loaderOptions: {
+              autoHideBadge: false,
+              renderParameters: {
+                hl: 'en'
+              }
+            }
+          });
         } catch (error) {
-          console.error('Error loading reCAPTCHA:', error);
+          console.error('Error initializing reCAPTCHA:', error);
         }
       }
     }
@@ -67,22 +52,17 @@ const fetchRecaptchaConfig = async () => {
 
 // Get reCAPTCHA token
 const getRecaptchaToken = async () => {
-  if (!recaptchaConfig.value.enabled || !recaptchaLoaded.value) {
+  if (!recaptchaConfig.value.enabled || !recaptchaInstance.value) {
     return null;
   }
 
-  return new Promise((resolve, reject) => {
-    try {
-      window.grecaptcha.ready(() => {
-        window.grecaptcha
-            .execute(recaptchaConfig.value.site_key, { action: 'submit_comment' })
-            .then(token => resolve(token))
-            .catch(error => reject(error));
-      });
-    } catch (error) {
-      reject(error);
-    }
-  });
+  try {
+    const token = await recaptchaInstance.value.executeAsync('submit_comment');
+    return token;
+  } catch (error) {
+    console.error('Error getting reCAPTCHA token:', error);
+    return null;
+  }
 };
 
 // Fetch comments using the headless comments API
@@ -137,17 +117,10 @@ const submitComment = async (event) => {
   try {
     // Get reCAPTCHA token if enabled
     if (recaptchaConfig.value.enabled) {
-      try {
-        const token = await getRecaptchaToken();
-        if (token) {
-          commentData.recaptcha_token = token;
-        } else {
-          message.value = 'Failed to verify reCAPTCHA. Please try again.';
-          submitting.value = false;
-          return;
-        }
-      } catch (error) {
-        console.error('reCAPTCHA error:', error);
+      const token = await getRecaptchaToken();
+      if (token) {
+        commentData.recaptcha_token = token;
+      } else {
         message.value = 'Failed to verify reCAPTCHA. Please try again.';
         submitting.value = false;
         return;
@@ -238,15 +211,6 @@ const attachReplyListeners = () => {
 // Watch for changes in rendered comments
 watch(renderedComments, () => {
   attachReplyListeners();
-});
-
-// Cleanup reCAPTCHA badge on unmount (optional)
-onBeforeUnmount(() => {
-  const badge = document.querySelector('.grecaptcha-badge');
-  if (badge && recaptchaConfig.value.enabled) {
-    // Optional: remove badge or leave it for other components
-    // badge.remove();
-  }
 });
 
 onMounted(async () => {
