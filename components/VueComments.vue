@@ -1,5 +1,6 @@
 <script setup>
 import {ref, onMounted, computed, watch, nextTick} from 'vue';
+import { useReCaptcha } from 'recaptcha-v3';
 
 const props = defineProps(['post_id', 'endpoint', 'api_key']);
 
@@ -8,6 +9,61 @@ const loading = ref(true);
 const submitting = ref(false);
 const message = ref('');
 const replyingTo = ref(null);
+const recaptchaConfig = ref({ enabled: false, site_key: '' });
+const recaptchaInstance = ref(null);
+
+// Fetch reCAPTCHA configuration
+const fetchRecaptchaConfig = async () => {
+  try {
+    const response = await fetch(
+        `${props.endpoint}/wp-json/headless-comments/v1/recaptcha/config`,
+        {
+          headers: {
+            'X-API-Key': props.api_key
+          }
+        }
+    );
+
+    if (response.ok) {
+      const config = await response.json();
+      recaptchaConfig.value = config;
+
+      // Initialize reCAPTCHA if enabled
+      if (config.enabled && config.site_key) {
+        try {
+          recaptchaInstance.value = await useReCaptcha({
+            siteKey: config.site_key,
+            loaderOptions: {
+              autoHideBadge: false,
+              renderParameters: {
+                hl: 'en'
+              }
+            }
+          });
+        } catch (error) {
+          console.error('Error initializing reCAPTCHA:', error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching reCAPTCHA config:', error);
+  }
+};
+
+// Get reCAPTCHA token
+const getRecaptchaToken = async () => {
+  if (!recaptchaConfig.value.enabled || !recaptchaInstance.value) {
+    return null;
+  }
+
+  try {
+    const token = await recaptchaInstance.value.executeAsync('submit_comment');
+    return token;
+  } catch (error) {
+    console.error('Error getting reCAPTCHA token:', error);
+    return null;
+  }
+};
 
 // Fetch comments using the headless comments API
 const fetchComments = async () => {
@@ -59,6 +115,18 @@ const submitComment = async (event) => {
   };
 
   try {
+    // Get reCAPTCHA token if enabled
+    if (recaptchaConfig.value.enabled) {
+      const token = await getRecaptchaToken();
+      if (token) {
+        commentData.recaptcha_token = token;
+      } else {
+        message.value = 'Failed to verify reCAPTCHA. Please try again.';
+        submitting.value = false;
+        return;
+      }
+    }
+
     const response = await fetch(
         `${props.endpoint}/wp-json/headless-comments/v1/posts/${props.post_id}/comments`,
         {
@@ -145,8 +213,9 @@ watch(renderedComments, () => {
   attachReplyListeners();
 });
 
-onMounted(() => {
-  fetchComments();
+onMounted(async () => {
+  await fetchRecaptchaConfig();
+  await fetchComments();
 });
 </script>
 
@@ -448,15 +517,22 @@ onMounted(() => {
 
 .comment-notes,
 .message {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
   border-radius: 4px;
   padding: 1rem;
   margin: 1rem 0;
 }
 
-.comment-notes.error,
+.comment-notes {
+  background-color: #f3f3f3;
+  border: 1px solid #eee;
+}
+
+.message.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
 .message.error {
   background-color: #f8d7da;
   color: #721c24;
