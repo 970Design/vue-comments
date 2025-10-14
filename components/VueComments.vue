@@ -1,8 +1,25 @@
 <script setup>
 import {ref, onMounted, computed, watch, nextTick} from 'vue';
-import { useReCaptcha } from 'recaptcha-v3';
 
-const props = defineProps(['post_id', 'endpoint', 'api_key']);
+const props = defineProps({
+  post_id: {
+    type: [String, Number],
+    required: true
+  },
+  endpoint: {
+    type: String,
+    required: true
+  },
+  api_key: {
+    type: String,
+    required: true
+  },
+  order: {
+    type: String,
+    default: 'DESC',
+    validator: (value) => ['ASC', 'DESC'].includes(value.toUpperCase())
+  }
+});
 
 const commentsData = ref(null);
 const loading = ref(true);
@@ -10,7 +27,42 @@ const submitting = ref(false);
 const message = ref('');
 const replyingTo = ref(null);
 const recaptchaConfig = ref({ enabled: false, site_key: '' });
-const recaptchaInstance = ref(null);
+const recaptchaReady = ref(false);
+
+// Load reCAPTCHA script dynamically
+const loadRecaptchaScript = (siteKey) => {
+  return new Promise((resolve, reject) => {
+    // Check if already loaded
+    if (window.grecaptcha) {
+      recaptchaReady.value = true;
+      resolve();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+    script.async = true;
+    script.defer = true;
+
+    script.onload = () => {
+      // Wait for grecaptcha to be ready
+      if (window.grecaptcha && window.grecaptcha.ready) {
+        window.grecaptcha.ready(() => {
+          recaptchaReady.value = true;
+          resolve();
+        });
+      } else {
+        reject(new Error('grecaptcha not available'));
+      }
+    };
+
+    script.onerror = () => {
+      reject(new Error('Failed to load reCAPTCHA script'));
+    };
+
+    document.head.appendChild(script);
+  });
+};
 
 // Fetch reCAPTCHA configuration
 const fetchRecaptchaConfig = async () => {
@@ -28,20 +80,12 @@ const fetchRecaptchaConfig = async () => {
       const config = await response.json();
       recaptchaConfig.value = config;
 
-      // Initialize reCAPTCHA if enabled
+      // Load reCAPTCHA script if enabled
       if (config.enabled && config.site_key) {
         try {
-          recaptchaInstance.value = await useReCaptcha({
-            siteKey: config.site_key,
-            loaderOptions: {
-              autoHideBadge: false,
-              renderParameters: {
-                hl: 'en'
-              }
-            }
-          });
+          await loadRecaptchaScript(config.site_key);
         } catch (error) {
-          console.error('Error initializing reCAPTCHA:', error);
+          console.error('Error loading reCAPTCHA script:', error);
         }
       }
     }
@@ -52,12 +96,14 @@ const fetchRecaptchaConfig = async () => {
 
 // Get reCAPTCHA token
 const getRecaptchaToken = async () => {
-  if (!recaptchaConfig.value.enabled || !recaptchaInstance.value) {
+  if (!recaptchaConfig.value.enabled || !recaptchaReady.value || !window.grecaptcha) {
     return null;
   }
 
   try {
-    const token = await recaptchaInstance.value.executeAsync('submit_comment');
+    const token = await window.grecaptcha.execute(recaptchaConfig.value.site_key, {
+      action: 'submit_comment'
+    });
     return token;
   } catch (error) {
     console.error('Error getting reCAPTCHA token:', error);
@@ -69,8 +115,9 @@ const getRecaptchaToken = async () => {
 const fetchComments = async () => {
   loading.value = true;
   try {
+    const orderParam = props.order ? props.order.toUpperCase() : 'DESC';
     const response = await fetch(
-        `${props.endpoint}/wp-json/headless-comments/v1/posts/${props.post_id}/comments`,
+        `${props.endpoint}/wp-json/headless-comments/v1/posts/${props.post_id}/comments?order=${orderParam}`,
         {
           headers: {
             'X-API-Key': props.api_key
