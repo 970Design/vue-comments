@@ -1,8 +1,26 @@
 <script setup>
 import {ref, onMounted, computed, watch, nextTick} from 'vue';
-import { useReCaptcha } from 'recaptcha-v3';
+import { load } from 'recaptcha-v3';
 
-const props = defineProps(['post_id', 'endpoint', 'api_key']);
+const props = defineProps({
+  post_id: {
+    type: [String, Number],
+    required: true
+  },
+  endpoint: {
+    type: String,
+    required: true
+  },
+  api_key: {
+    type: String,
+    required: true
+  },
+  order: {
+    type: String,
+    default: 'DESC',
+    validator: (value) => ['ASC', 'DESC'].includes(value.toUpperCase())
+  }
+});
 
 const commentsData = ref(null);
 const loading = ref(true);
@@ -28,20 +46,12 @@ const fetchRecaptchaConfig = async () => {
       const config = await response.json();
       recaptchaConfig.value = config;
 
-      // Initialize reCAPTCHA if enabled
+      // Load reCAPTCHA v3 if enabled
       if (config.enabled && config.site_key) {
         try {
-          recaptchaInstance.value = await useReCaptcha({
-            siteKey: config.site_key,
-            loaderOptions: {
-              autoHideBadge: false,
-              renderParameters: {
-                hl: 'en'
-              }
-            }
-          });
+          recaptchaInstance.value = await load(config.site_key);
         } catch (error) {
-          console.error('Error initializing reCAPTCHA:', error);
+          console.error('Error loading reCAPTCHA:', error);
         }
       }
     }
@@ -57,7 +67,7 @@ const getRecaptchaToken = async () => {
   }
 
   try {
-    const token = await recaptchaInstance.value.executeAsync('submit_comment');
+    const token = await recaptchaInstance.value.execute('submit_comment');
     return token;
   } catch (error) {
     console.error('Error getting reCAPTCHA token:', error);
@@ -69,8 +79,9 @@ const getRecaptchaToken = async () => {
 const fetchComments = async () => {
   loading.value = true;
   try {
+    const orderParam = props.order ? props.order.toUpperCase() : 'DESC';
     const response = await fetch(
-        `${props.endpoint}/wp-json/headless-comments/v1/posts/${props.post_id}/comments`,
+        `${props.endpoint}/wp-json/headless-comments/v1/posts/${props.post_id}/comments?order=${orderParam}`,
         {
           headers: {
             'X-API-Key': props.api_key

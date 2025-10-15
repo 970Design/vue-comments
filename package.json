@@ -1,6 +1,6 @@
 {
   "name": "@970design/vue-comments",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "A Vue component for displaying headless WordPress comments.",
   "repository": {
     "type": "git",
@@ -46,7 +46,6 @@
     "vue-comments.d.ts"
   ],
   "dependencies": {
-    "recaptcha-v3": "^1.11.3",
     "vue": "^3.5.21"
   },
   "devDependencies": {
