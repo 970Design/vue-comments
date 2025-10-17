@@ -58,6 +58,7 @@ const fetchRecaptchaConfig = async () => {
   } catch (error) {
     console.error('Error fetching reCAPTCHA config:', error);
   }
+
 };
 
 // Get reCAPTCHA token
