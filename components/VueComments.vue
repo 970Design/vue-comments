@@ -68,6 +68,7 @@ const getRecaptchaToken = async () => {
 
   try {
     const token = await recaptchaInstance.value.execute('submit_comment');
+
     return token;
   } catch (error) {
     console.error('Error getting reCAPTCHA token:', error);
@@ -129,6 +130,7 @@ const submitComment = async (event) => {
     // Get reCAPTCHA token if enabled
     if (recaptchaConfig.value.enabled) {
       const token = await getRecaptchaToken();
+
       if (token) {
         commentData.recaptcha_token = token;
       } else {
